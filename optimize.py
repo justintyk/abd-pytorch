@@ -1,5 +1,5 @@
 """
-Adjust affected layers and hyperparameters using bayesian optimization
+Optimize hyperparameters and layers to select using bayesian optimization
 """
 
 from __future__ import annotations

@@ -1,0 +1,9 @@
+accelerate>=0.30
+bitsandbytes>=0.43
+datasets>=2.18
+nanogcg>=0.3
+numpy
+optuna>=3.5
+pandas>=2.0
+torch>=2.1
+transformers>=4.40

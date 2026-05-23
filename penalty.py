@@ -50,25 +50,19 @@ def apply_penalty(
 # -----------------------------------------------------------------------------
 
 def _get_decoder_layers(model: nn.Module) -> nn.ModuleList:
-    """Locate the transformer decoder layer ModuleList on common HF models."""
+    """Locate the transformer decoder layer ModuleList on HF models."""
     if hasattr(model, "model") and hasattr(model.model, "layers"):
-        return model.model.layers  # Llama, Vicuna, Qwen2, Mistral
-    if hasattr(model, "transformer") and hasattr(model.transformer, "h"):
-        return model.transformer.h  # GPT-2, GPT-Neo
-    if hasattr(model, "gpt_neox") and hasattr(model.gpt_neox, "layers"):
-        return model.gpt_neox.layers  # GPT-NeoX
+        return model.model.layers
     raise AttributeError(
         "Could not locate decoder layers on model. "
-        "Expected model.model.layers, model.transformer.h, or model.gpt_neox.layers."
+        "Expected model.model.layers."
     )
-
 
 def _layer_output_hidden(output) -> Tensor:
     """Decoder layers return either a Tensor or a tuple (hidden, ...)."""
     if isinstance(output, Tensor):
         return output
     return output[0]
-
 
 @torch.no_grad()
 def compute_layer_means(
@@ -78,12 +72,7 @@ def compute_layer_means(
     device: str | torch.device = "cpu",
     max_length: int = 512,
 ) -> dict[int, tuple[float, float]]:
-    """Compute (mu_D^l, sigma_D^l) for every decoder layer.
-
-    Paper protocol (Appendix E.3): ~400 non-overlapping AdvBench prompts.
-    mu and sigma are scalars pooled across all hidden dims and all samples,
-    using the last-token activation at each layer.
-    """
+    """Compute (mu_D^l, sigma_D^l) for every decoder layer."""
     layers = _get_decoder_layers(model)
     L = len(layers)
     sums = [0.0] * L
@@ -130,16 +119,14 @@ def compute_layer_means(
         out[i] = (mu, float(np.sqrt(var)))
     return out
 
-
 def js_divergence_normal(
     values: np.ndarray,
     mu: float,
     sigma: float,
     n_bins: int = 200,
 ) -> float:
-    """JSD between the empirical distribution of `values` and N(mu, sigma).
-
-    Sanity check; paper reports max JSD = 0.0839 across layers (Appendix E.1).
+    """
+    JSD between the empirical distribution of `values` and N(mu, sigma).
     """
     if sigma <= 0:
         raise ValueError("sigma must be positive")
@@ -207,7 +194,11 @@ class ABDHooker:
                 return output
             mu = self.means[idx]
             hidden = _layer_output_hidden(output)
-            new_hidden = apply_penalty(hidden, mu, params.alpha, params.beta, params.k)
+            # Apply penalty only at the last token position
+            last = hidden[:, -1:, :]
+            new_last = apply_penalty(last, mu, params.alpha, params.beta, params.k)
+            new_hidden = hidden.clone()
+            new_hidden[:, -1:, :] = new_last
             if isinstance(output, Tensor):
                 return new_hidden
             return (new_hidden, *output[1:])

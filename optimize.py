@@ -69,9 +69,7 @@ def compute_dsr(
     batch_size: int = 1,
     **gen_kwargs,
 ) -> float:
-    """
-    Generate completions and return the fraction containing a refusal string
-    """
+    """Generate completions and return the fraction containing a refusal string."""
     if not prompts:
         return 0.0
     model.eval()
